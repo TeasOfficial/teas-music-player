@@ -29,6 +29,23 @@ export interface ApiStatus {
   bootstrapError?: string
 }
 
+/**
+ * 后端 API 的安装进度（首次启动要下载源码 + 依赖，合计约 21MB）。
+ * 主进程在安装过程中持续广播，界面据此显示进度条与实时日志。
+ */
+export interface ApiProgress {
+  /** 阶段机：idle 空闲 / fetch 取源码 / deps 取依赖 / verify 自检 / ready 完成 / error 失败 */
+  phase: 'idle' | 'fetch' | 'deps' | 'verify' | 'ready' | 'error'
+  /** 面向用户的一句话说明 */
+  message: string
+  /** 0~1 */
+  ratio: number
+  /** 最近几行原始日志（等宽展示，让用户看到「确实在动」） */
+  log: string[]
+  /** 失败时的错误信息 */
+  error?: string
+}
+
 export interface Artist {
   id: number
   name: string

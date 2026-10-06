@@ -623,6 +623,100 @@
   font-size: 12px;
 }
 
+/* 首次安装面板：阶段 + 进度条 + 实时日志 */
+.boot-panel {
+  width: min(520px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-weak);
+  box-shadow: inset 0 0 0 1px var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur));
+  text-align: left;
+}
+
+.boot-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent);
+}
+
+.boot-head-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text);
+}
+
+/* 标题最多两行：失败原因之类很长的文案不能把面板撑变形 */
+.boot-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.boot-percent {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.boot-progress {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-active);
+  overflow: hidden;
+}
+
+.boot-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  transition: width 0.25s var(--ease);
+}
+
+.boot-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 84px;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+
+.boot-log-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 失败详情：等宽 + 可选中，方便用户复制去提问 */
+.boot-error-box {
+  max-width: min(620px, 92vw);
+  max-height: 160px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  text-align: left;
+  user-select: text;
+  word-break: break-all;
+}
+
 /* ==========================================================================
    播放条：悬浮玻璃 dock
    ========================================================================== */

@@ -9,6 +9,7 @@ import type {
 } from '@shared/ipc'
 import type {
   ApiStatus,
+  ApiProgress,
   AppInfo,
   AuthState,
   DownloadTask,
@@ -29,6 +30,8 @@ const bridge: NcmBridge = {
     modules: () => invoke<string[]>(IPC.ApiModules),
     status: () => invoke<ApiStatus>(IPC.ApiStatus),
     bootstrap: () => invoke<ApiStatus>(IPC.ApiBootstrap),
+    setupProgress: () => invoke<ApiProgress>(IPC.ApiSetupProgress),
+    retrySetup: () => invoke<ApiStatus>(IPC.ApiRetrySetup),
   },
   auth: {
     qrCreate: () => invoke(IPC.AuthQrCreate),

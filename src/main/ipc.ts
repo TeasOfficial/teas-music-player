@@ -17,6 +17,11 @@ import { appPaths, invalidatePaths } from './paths'
 import { toLocalUrl } from './protocol'
 import { settings, session } from './store'
 import { bootstrapApi, getModuleNames, getStatus } from './api/loader'
+import {
+  ensureApiReady,
+  getSetupProgress,
+  onSetupProgress,
+} from './api/loader'
 import { callApi } from './api/invoke'
 import {
   getAuthState,
@@ -28,6 +33,7 @@ import {
 } from './api/auth'
 import {
   applyLyricLock,
+  broadcast,
   closeLyricWindow,
   createLyricWindow,
   getWindowState,
@@ -61,6 +67,9 @@ function requireMainWindow(): Electron.BrowserWindow {
   if (!win || win.isDestroyed()) throw new Error('主窗口不可用')
   return win
 }
+
+/** 安装进度广播只订阅一次（registerIpcHandlers 可能被重复调用） */
+let setupProgressBound = false
 
 async function dirSize(dir: string): Promise<CacheSize> {
   let bytes = 0
@@ -130,6 +139,28 @@ export function registerIpcHandlers(): void {
   handle(IPC.ApiModules, () => getModuleNames())
   handle(IPC.ApiStatus, () => getStatus())
   handle(IPC.ApiBootstrap, () => bootstrapApi())
+  // 界面挂载后先补一次当前进度，再靠事件跟增量（避免错过早期事件）
+  handle(IPC.ApiSetupProgress, () => getSetupProgress())
+  handle(IPC.ApiRetrySetup, async () => {
+    const result = await ensureApiReady()
+    if (!result.ok) {
+      const status = getStatus()
+      return {
+        ...status,
+        ready: false,
+        bootstrapError: result.error ?? status.bootstrapError,
+      }
+    }
+    return bootstrapApi(true)
+  })
+
+  // 安装进度实时广播（只订阅一次，避免重复注册）
+  if (!setupProgressBound) {
+    setupProgressBound = true
+    onSetupProgress((progress) =>
+      broadcast(IPC_EVENT.ApiSetupProgress, progress),
+    )
+  }
 
   /* ---------------- 认证 ---------------- */
   handle(IPC.AuthQrCreate, () => qrCreate())

@@ -13,7 +13,7 @@ import {
   useLocation,
 } from 'react-router-dom'
 import { IPC_EVENT } from '@shared/ipc'
-import type { PlayerCommand, Settings } from '@shared/types'
+import type { ApiProgress, PlayerCommand, Settings } from '@shared/types'
 import { Icon } from '@/components/ui/Icon'
 import { ToastHost } from '@/components/ui/ToastHost'
 import { ContextMenuHost } from '@/components/ui/ContextMenu'
@@ -59,9 +59,55 @@ import Login from '@/pages/Login'
 /* 全局数据引导                                                        */
 /* ------------------------------------------------------------------ */
 
-function useBootstrap(): { ready: boolean; error: string } {
+function useBootstrap(): {
+  ready: boolean
+  error: string
+  progress: ApiProgress
+  retrying: boolean
+  retry: () => void
+} {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
+  const [retrying, setRetrying] = useState(false)
+  const [progress, setProgress] = useState<ApiProgress>({
+    phase: 'idle',
+    message: '',
+    ratio: 0,
+    log: [],
+  })
+
+  // 安装进度：先补一次当前值，再跟增量事件。
+  // （界面可能比安装流程晚挂载，只订阅事件会漏掉早期进度）
+  useEffect(() => {
+    let cancelled = false
+    const off = window.ncm.on<ApiProgress>(
+      IPC_EVENT.ApiSetupProgress,
+      (next) => {
+        if (!cancelled) setProgress(next)
+      },
+    )
+    void window.ncm.api.setupProgress().then((current) => {
+      if (!cancelled && current.phase !== 'idle') setProgress(current)
+    })
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [])
+
+  /** 引导第二步之后的本地数据加载 */
+  const loadLocalData = async (): Promise<void> => {
+    bindQuitFlush()
+    await Promise.all([
+      usePlayerStore.getState().init(),
+      useDownloadStore.getState().init(),
+      useLocalStore.getState().init(),
+      useAuthStore.getState().check(true),
+    ])
+    if (useAuthStore.getState().loggedIn)
+      void usePlayerStore.getState().loadLiked()
+    setReady(true)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -69,7 +115,7 @@ function useBootstrap(): { ready: boolean; error: string } {
     const run = async (): Promise<void> => {
       // 1) 设置（决定主题、音量、音质）
       await useSettingsStore.getState().load()
-      // 2) 主进程 API 引导（加载 4xx 个接口，首次约 2 秒）
+      // 2) 主进程 API 引导（首次启动会下载源码 + 依赖，约 20MB）
       const status = await window.ncm.api.bootstrap()
       if (cancelled) return
       if (!status.ready) {
@@ -78,28 +124,39 @@ function useBootstrap(): { ready: boolean; error: string } {
       }
       // 3) 并行加载各类本地数据
       // 关窗前把播放状态刷盘，避免刚好落在防抖窗口里丢掉最后一段进度
-      bindQuitFlush()
-      await Promise.all([
-        usePlayerStore.getState().init(),
-        useDownloadStore.getState().init(),
-        useLocalStore.getState().init(),
-        useAuthStore.getState().check(true),
-      ])
-      if (cancelled) return
-
-      // 4) 登录后拉取收藏列表
-      if (useAuthStore.getState().loggedIn)
-        void usePlayerStore.getState().loadLiked()
-      setReady(true)
+      await loadLocalData()
     }
 
     void run()
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { ready, error }
+  const retry = (): void => {
+    if (retrying) return
+    setRetrying(true)
+    setError('')
+    void (async () => {
+      try {
+        const status = await window.ncm.api.retrySetup()
+        if (!status.ready) {
+          setError(status.bootstrapError ?? '重试仍然失败')
+          return
+        }
+        await loadLocalData()
+      } catch (retryError) {
+        setError(
+          retryError instanceof Error ? retryError.message : '重试失败',
+        )
+      } finally {
+        setRetrying(false)
+      }
+    })()
+  }
+
+  return { ready, error, progress, retrying, retry }
 }
 
 /** 主进程 → 渲染层的事件订阅 */
@@ -192,27 +249,107 @@ function useKeyboardShortcuts(): void {
 /* 骨架                                                                */
 /* ------------------------------------------------------------------ */
 
-function ApiErrorScreen({ message }: { message: string }): ReactNode {
+/** 阶段 → 用户可读的阶段名 */
+const SETUP_PHASE_LABEL: Record<ApiProgress['phase'], string> = {
+  idle: '准备中',
+  fetch: '下载音乐接口',
+  deps: '准备接口依赖',
+  verify: '校验与自检',
+  ready: '即将完成',
+  error: '安装失败',
+}
+
+function ApiErrorScreen({
+  message,
+  retrying,
+  onRetry,
+}: {
+  message: string
+  retrying: boolean
+  onRetry: () => void
+}): ReactNode {
   return (
     <div className="boot-screen">
       <Icon name="info" size={40} />
-      <h2 className="f-20">{message}</h2>
+      <h2 className="f-20">音乐接口安装失败</h2>
+      <div className="boot-error-box">{message}</div>
+      <div className="row gap-8" style={{ marginTop: 4 }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={retrying}
+          onClick={onRetry}
+        >
+          {retrying ? '重试中…' : '重试'}
+        </button>
+      </div>
       <p className="muted f-12 boot-hint">
-        请确认本机已安装 API 依赖（在仓库根目录执行 <code>pnpm install</code>
-        ），
+        首次启动需要联网从 npm 获取后端接口（源码约 12.8MB + 依赖预置包 8.2MB）。
         <br />
-        或设置环境变量 <code>NCM_API_ROOT</code> 指向
-        NeteaseCloudMusicApiEnhanced 源码目录后重启应用。
+        <br />
+        若本机无法访问外网，可以用环境变量 <code>NCM_API_ROOT</code>{' '}
+        指向一份自备的 API 源码目录后重启；
+        <br />
+        没有依赖预置包时会回退到本机 npm 安装，因此也可以先装好 Node.js 再重试。
       </p>
     </div>
   )
 }
 
-function BootScreen(): ReactNode {
+/**
+ * 启动/首次安装界面。
+ * 首次启动要下载约 20MB（接口源码 + 依赖），这里显示阶段、进度条与实时日志，
+ * 让用户清楚「在做什么、还要多久」，而不是干等一个转圈。
+ */
+function BootScreen({ progress }: { progress: ApiProgress }): ReactNode {
+  const percent = Math.max(2, Math.round(progress.ratio * 100))
+  const busy = progress.phase !== 'idle' && progress.phase !== 'ready'
+  const recentLog = progress.log.slice(-4)
+
   return (
     <div className="boot-screen">
-      <Icon name="loading" size={30} className="spin" />
-      <span className="f-14 text-2">正在初始化音乐接口…</span>
+      <div className="boot-panel">
+        <div className="boot-head">
+          <Icon
+            name={busy ? 'loading' : 'download'}
+            size={22}
+            className={busy ? 'spin' : undefined}
+          />
+          <div className="boot-head-text">
+            <div className="f-15 bold boot-title">
+              {progress.message || '正在初始化音乐接口…'}
+            </div>
+            {busy && (
+              <div className="muted f-12">
+                {SETUP_PHASE_LABEL[progress.phase]}
+                {' · '}
+                首次启动需要下载约 20MB，仅在第一次进行
+              </div>
+            )}
+          </div>
+          <span className="boot-percent f-12 muted">{percent}%</span>
+        </div>
+
+        <div
+          className="boot-progress"
+          role="progressbar"
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div className="boot-progress-fill" style={{ width: `${percent}%` }} />
+        </div>
+
+        {recentLog.length > 0 && (
+          <div className="boot-log">
+            {recentLog.map((line, index) => (
+              <div key={`${index}-${line}`} className="boot-log-line">
+                {line}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -255,13 +392,17 @@ function AuroraBackdrop(): ReactNode {
 }
 
 function Shell(): ReactNode {
-  const { ready, error } = useBootstrap()
+  const { ready, error, progress, retrying, retry } = useBootstrap()
   const mainRef = useRef<HTMLElement | null>(null)
   useMainProcessEvents()
   useKeyboardShortcuts()
 
-  if (error) return <ApiErrorScreen message={error} />
-  if (!ready) return <BootScreen />
+  if (error) {
+    return (
+      <ApiErrorScreen message={error} retrying={retrying} onRetry={retry} />
+    )
+  }
+  if (!ready) return <BootScreen progress={progress} />
 
   return (
     <div className="app-shell">

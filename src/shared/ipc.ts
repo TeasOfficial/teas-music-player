@@ -10,6 +10,7 @@ import type {
   Song,
   SoundLevel,
   ApiStatus,
+  ApiProgress,
   UserProfile,
 } from './types'
 
@@ -20,6 +21,8 @@ export const IPC = {
   ApiModules: 'api:modules',
   ApiStatus: 'api:status',
   ApiBootstrap: 'api:bootstrap',
+  ApiSetupProgress: 'api:setup-progress',
+  ApiRetrySetup: 'api:retry-setup',
 
   /* ---- 认证 ---- */
   AuthQrCreate: 'auth:qr-create',
@@ -94,6 +97,8 @@ export const IPC_EVENT = {
   Toast: 'evt:toast',
   Navigate: 'evt:navigate',
   ThemeChanged: 'evt:theme-changed',
+  /** 后端 API 安装进度（首次启动下载源码与依赖） */
+  ApiSetupProgress: 'evt:api-setup-progress',
 } as const
 
 export interface WindowState {
@@ -154,6 +159,10 @@ export interface NcmBridge {
     modules(): Promise<string[]>
     status(): Promise<ApiStatus>
     bootstrap(): Promise<ApiStatus>
+    /** 当前安装进度（用于「先挂载界面再开始下载」时补齐状态） */
+    setupProgress(): Promise<ApiProgress>
+    /** 安装失败后重试 */
+    retrySetup(): Promise<ApiStatus>
   }
   auth: {
     qrCreate(): Promise<QrCreateResult>

@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { app } from 'electron'
-import type { ApiStatus } from '@shared/types'
+import type { ApiProgress, ApiStatus } from '@shared/types'
 import { logger } from '../logger'
 
 /** 用 createRequire 拿到「真正的 require」，避免打包器静态分析后把 API 源码打进 bundle */
@@ -157,6 +157,86 @@ function collectModules(
 }
 
 /**
+ * 安装进度：主进程维护一份，任何时刻可被界面查询（`api:setup-progress`），
+ * 同时在变化时广播给所有渲染进程。这样即使界面比安装流程晚挂载，
+ * 也能拿到当前状态，不会出现「进度条永远停在 0」。
+ */
+let setupProgress: ApiProgress = {
+  phase: 'idle',
+  message: '',
+  ratio: 0,
+  log: [],
+}
+
+type ProgressListener = (progress: ApiProgress) => void
+const progressListeners = new Set<ProgressListener>()
+
+/** 订阅进度变化（main/ipc.ts 用它转发到渲染进程） */
+export function onSetupProgress(listener: ProgressListener): () => void {
+  progressListeners.add(listener)
+  return () => progressListeners.delete(listener)
+}
+
+export function getSetupProgress(): ApiProgress {
+  return { ...setupProgress, log: [...setupProgress.log] }
+}
+
+function updateSetupProgress(
+  patch: Partial<ApiProgress> & { logLine?: string },
+): void {
+  const { logLine, ...rest } = patch
+  const log = logLine
+    ? [...setupProgress.log, logLine].slice(-8)
+    : setupProgress.log
+  // 进度只在唯一写入点保证单调：日志启发式与精确回调混用时，
+  // 任何一次写入都不允许让进度条倒退（唯一例外是失败归零重来）。
+  const nextRatio =
+    rest.phase === 'error'
+      ? 0
+      : Math.max(setupProgress.ratio, rest.ratio ?? setupProgress.ratio)
+  setupProgress = { ...setupProgress, ...rest, ratio: nextRatio, log }
+  const snapshot = getSetupProgress()
+  for (const listener of progressListeners) {
+    try {
+      listener(snapshot)
+    } catch {
+      // 单个订阅者异常不影响安装流程
+    }
+  }
+}
+
+/** 进度阶段 → 面向用户的一句话（不要把半成品文案塞进界面标题） */
+const PHASE_MESSAGE: Record<ApiProgress['phase'], string> = {
+  idle: '准备中…',
+  fetch: '正在下载音乐接口…',
+  deps: '正在准备接口依赖…',
+  verify: '正在校验接口完整性…',
+  ready: '音乐接口已就绪',
+  error: '安装失败',
+}
+
+/**
+ * 把原始日志行收敛成一句人话当标题。
+ * 原始行（可能含长 URL、npm 命令行）只进下方的日志区。
+ */
+function friendlyMessage(text: string): string {
+  if (/下载完成/.test(text)) return '音乐接口源码下载完成'
+  if (/下载/.test(text) && /tarball|tgz|api-/.test(text)) return '正在下载音乐接口源码…'
+  if (/integrity|shasum|校验通过/.test(text)) return '源码完整性校验通过'
+  if (/解包/.test(text)) return '正在解包接口源码…'
+  if (/预置包.*(地址|获取)/.test(text)) return '正在获取依赖预置包…'
+  if (/预置包下载完成/.test(text)) return '依赖预置包下载完成'
+  if (/预置包解出/.test(text)) return '正在展开依赖…'
+  if (/预置包已满足|依赖已齐备|跳过 npm/.test(text)) return '依赖已就绪'
+  if (/仍缺.*npm|安装 \d+ 个生产依赖/.test(text)) return '正在用 npm 安装依赖…'
+  if (/added \d+ packages/.test(text)) return '依赖安装完成'
+  if (/冒烟|接口全部可调用/.test(text)) return '正在自检接口…'
+  if (/已安装 \d/.test(text)) return '安装完成'
+  if (/失败|回退/.test(text)) return '遇到问题，正在尝试备用方案…'
+  return text.length > 42 ? `${text.slice(0, 42)}…` : text
+}
+
+/**
  * 确保本地有一份可用的 API：没有就从 npm 拉一份最新版。
  *
  * 这是薄壳的「首次启动」主路径——壳本身不带 API 源码。
@@ -170,13 +250,7 @@ let ensurePromise: Promise<{
   error?: string
 }> | null = null
 
-export function ensureApiReady(
-  onProgress?: (progress: {
-    phase: string
-    message: string
-    ratio: number
-  }) => void,
-): Promise<{
+export function ensureApiReady(): Promise<{
   ok: boolean
   apiRoot: string
   version?: string
@@ -185,6 +259,12 @@ export function ensureApiReady(
 }> {
   const existing = resolveInstalledApiRoot()
   if (existing) {
+    updateSetupProgress({
+      phase: 'ready',
+      message: '本地已有可用的音乐接口',
+      ratio: 1,
+      error: undefined,
+    })
     return Promise.resolve({ ok: true, apiRoot: existing })
   }
   if (ensurePromise) return ensurePromise
@@ -192,25 +272,71 @@ export function ensureApiReady(
   ensurePromise = (async () => {
     const report = (message: string, ratio: number): void => {
       logger.info(`[API 拉取] ${message}`)
-      onProgress?.({ phase: 'fetch', message, ratio })
+      updateSetupProgress({ phase: 'fetch', message, ratio })
     }
     try {
+      updateSetupProgress({
+        phase: 'fetch',
+        message: '正在获取最新版本信息…',
+        ratio: 0.05,
+        log: [],
+        error: undefined,
+      })
       // 延迟 require：避免在「已带 API」的正常启动路径上加载网络相关代码
       const { ensureApiVersion, defaultRegistry } = await import('./fetcher')
-      report(`从 ${defaultRegistry()} 获取最新版本信息`, 0.05)
+      report(`从 ${defaultRegistry()} 获取最新版本信息`, 0.1)
+
       const result = await ensureApiVersion(versionsDir(), undefined, {
-        onLog: (line) => onProgress?.({ phase: 'fetch', message: line, ratio: 0.3 }),
-        onProgress: (progress) =>
-          onProgress?.({
-            phase: progress.phase,
-            message: progress.phase,
-            ratio: progress.ratio,
-          }),
+        // 每一行原始日志都进界面：用户能直观看到"在下载/在解包/在自检"
+        onLog: (line) => {
+          const text = line.trim()
+          if (!text) return
+          const phase: ApiProgress['phase'] = /预置包|依赖|npm|packages/.test(text)
+            ? 'deps'
+            : /冒烟|解包|校验/.test(text)
+              ? 'verify'
+              : 'fetch'
+          // 粗略推进：拿到日志说明在动；单调性由 updateSetupProgress 统一保证
+          const ratio = Math.min(0.9, setupProgress.ratio + 0.04)
+          updateSetupProgress({
+            phase,
+            // 标题只放短句；原始行（含 URL、npm 命令行）进下面日志区，
+            // 否则一条命令行就能把标题撑成三行。
+            message: friendlyMessage(text),
+            ratio,
+            logLine: text,
+          })
+        },
+        onProgress: (progress) => {
+          const mapped: ApiProgress['phase'] =
+            progress.phase === 'install' || progress.phase === 'deps-bundle'
+              ? 'deps'
+              : progress.phase === 'verify'
+                ? 'verify'
+                : progress.phase === 'done'
+                  ? 'ready'
+                  : 'fetch'
+          const ratio =
+            progress.phase === 'deps-bundle'
+              ? 0.55
+              : progress.phase === 'install'
+                ? 0.6
+                : progress.ratio
+          updateSetupProgress({ phase: mapped, ratio, message: PHASE_MESSAGE[mapped] })
+        },
       })
+
       if (!result.ok || !result.dir) {
-        return { ok: false, apiRoot: '', error: result.error ?? 'API 拉取失败' }
+        const error = result.error ?? 'API 拉取失败'
+        updateSetupProgress({ phase: 'error', message: error, error, ratio: 0 })
+        return { ok: false, apiRoot: '', error }
       }
-      report(`已安装 ${result.version}`, 1)
+
+      updateSetupProgress({
+        phase: 'ready',
+        message: `已安装 ${result.version}`,
+        ratio: 1,
+      })
       // 让 resolveApiRoot 立即看到新装版本
       const resolved = resolveApiRoot()
       return {
@@ -222,8 +348,15 @@ export function ensureApiReady(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       logger.error('API 拉取失败:', error)
+      updateSetupProgress({
+        phase: 'error',
+        message,
+        error: message,
+        ratio: 0,
+      })
       return { ok: false, apiRoot: '', error: message }
     } finally {
+      // 失败/成功后都清掉这个 in-flight 记录：失败时用户点「重试」才能真的重来
       ensurePromise = null
     }
   })()
