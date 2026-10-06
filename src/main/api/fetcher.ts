@@ -301,6 +301,83 @@ function missingRuntimeDeps(dir: string, dependencyNames: string[]): string[] {
   return dependencyNames.filter((name) => !fs.existsSync(path.join(modulesDir, name)))
 }
 
+/**
+ * 依赖预置包（GitHub Release 附件）。
+ *
+ * 上游 API 的生产依赖实测 0 个原生模块（纯 JS），所以可以预打包成一份
+ * `deps-<version>.tar.gz` 放在我们自己的 Release 里。壳优先下载它直接解包，
+ * **用户机器上就不需要任何 npm/Node**；只有拿不到预置包时才退回去调用 npm。
+ *
+ * 可用环境变量覆盖（便于自建镜像或在没有 Release 时关闭这条路径）：
+ *   NCM_DEPS_BUNDLE_URL   完全自定义的下载地址模板，支持 {version} 占位
+ *   NCM_DEPS_BUNDLE_TAG   自定义 Release tag（默认 `api-deps-<version>`）
+ *   NCM_DEPS_BUNDLE=0     禁用预置包路径，强制走 npm
+ */
+export function depsBundleUrl(version: string): string {
+  if (process.env.NCM_DEPS_BUNDLE === '0') return ''
+  const template = process.env.NCM_DEPS_BUNDLE_URL
+  if (template) return template.replace('{version}', version)
+  const tag = process.env.NCM_DEPS_BUNDLE_TAG || `api-deps-${version}`
+  return `https://github.com/TeasOfficial/teas-music-player/releases/download/${tag}/deps-${version}.tar.gz`
+}
+
+/**
+ * 下载依赖预置包并解到 `<destDir>/node_modules`。
+ * 返回实际解出的文件数；任何一步失败都返回 0（由调用方回退到 npm）。
+ */
+async function installDepsFromBundle(
+  destDir: string,
+  version: string,
+  onLine?: (line: string) => void,
+): Promise<number> {
+  const url = depsBundleUrl(version)
+  if (!url) return 0
+  try {
+    onLine?.(`获取依赖预置包 ${url}`)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 120_000)
+    let res: Response
+    try {
+      res = await fetch(url, { signal: controller.signal, redirect: 'follow' })
+    } finally {
+      clearTimeout(timer)
+    }
+    if (!res.ok) {
+      onLine?.(`预置包不可用（HTTP ${res.status}），将回退 npm`)
+      return 0
+    }
+    const bytes = Buffer.from(await res.arrayBuffer())
+    onLine?.(`预置包下载完成 ${(bytes.length / 1024 / 1024).toFixed(2)} MB`)
+
+    const target = path.resolve(destDir)
+    const tar = openTar(zlib.gunzipSync(bytes))
+    let files = 0
+    for (let entry = tar.next(); entry; entry = tar.next()) {
+      const relative = entry.full
+      // 只接受 node_modules/ 下的条目，并拒绝路径逃逸
+      if (!relative.startsWith('node_modules/') || relative.includes('..')) {
+        continue
+      }
+      const absolute = path.join(target, relative)
+      if (!absolute.startsWith(target)) continue
+      if (entry.typeFlag === '5') {
+        fs.mkdirSync(absolute, { recursive: true })
+      } else if (entry.typeFlag === '0' || entry.typeFlag === '\0') {
+        fs.mkdirSync(path.dirname(absolute), { recursive: true })
+        fs.writeFileSync(absolute, entry.body)
+        files += 1
+      }
+    }
+    onLine?.(`预置包解出 ${files} 个文件`)
+    return files
+  } catch (error) {
+    onLine?.(
+      `预置包处理失败（${error instanceof Error ? error.message : String(error)}），将回退 npm`,
+    )
+    return 0
+  }
+}
+
 function declaredDependencies(dir: string): string[] {
   try {
     const pkg = JSON.parse(
@@ -386,9 +463,28 @@ export async function installApiVersion(
       throw new Error('解包后的目录不完整（缺 main.js / module / util/config.json）')
     }
 
-    // 4) 依赖
+    // 4) 依赖：优先用预置包（用户机器无需 npm），不行才回退 npm
     const dependencyNames = declaredDependencies(destDir)
-    const missing = missingRuntimeDeps(destDir, dependencyNames)
+    let missing = missingRuntimeDeps(destDir, dependencyNames)
+    if (missing.length > 0) {
+      note(`缺少 ${missing.length} 个生产依赖，先尝试预置包（免 npm）`)
+      hooks.onProgress?.({ phase: 'deps-bundle', ratio: 0.4 })
+      const extracted = await installDepsFromBundle(
+        destDir,
+        remote.version,
+        (line) => hooks.onLog?.(line),
+      )
+      if (extracted > 0) {
+        missing = missingRuntimeDeps(destDir, dependencyNames)
+        if (missing.length === 0) {
+          note('预置包已满足全部依赖，跳过 npm')
+          hooks.onProgress?.({ phase: 'deps-bundle', ratio: 0.7 })
+        } else {
+          note(`预置包后仍缺 ${missing.length} 个依赖，继续用 npm 补齐`)
+        }
+      }
+    }
+
     if (missing.length > 0) {
       const npmCommand = npmSpawnCommand()
       note(
