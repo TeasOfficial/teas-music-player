@@ -1,0 +1,64 @@
+/* 电台详情专属样式（其余复用 pages.css / components.css 的通用 class） */
+
+.podcast-detail-head {
+  gap: 10px;
+  margin: 20px 0 8px;
+}
+
+.podcast-detail-more {
+  justify-content: center;
+  padding: 16px 0;
+}
+
+/* 已订阅时用强调色区分状态 */
+.podcast-subscribed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.podcast-row-time {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+/* 与 Podcast.css 中共用的节目行补充样式保持一致（两个页面各自引入 CSS） */
+.podcast-programs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+/* 展开节目简介后不截断 */
+.podcast-row-desc.expanded {
+  color: var(--text-2);
+}
+
+.podcast-row-radio {
+  margin-right: 8px;
+  color: var(--accent);
+  font-size: 11.5px;
+}
+
+.podcast-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.podcast-row-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.podcast-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+}

@@ -1,0 +1,171 @@
+/* ==========================================================================
+   下载管理页专属样式（其余样式复用 styles/ 下的通用 class）
+   ========================================================================== */
+
+.dl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 16px 0 14px;
+}
+
+.dl-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.dl-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.dl-stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-stat-danger .dl-stat-value {
+  color: var(--accent);
+}
+
+/* ---------------- 任务列表 ---------------- */
+
+.dl-table {
+  width: 100%;
+}
+
+.dl-head-row,
+.dl-row {
+  display: grid;
+  grid-template-columns:
+    minmax(200px, 2.4fr) 104px minmax(200px, 1.6fr)
+    82px 146px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.dl-head-row {
+  height: 34px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.dl-row {
+  min-height: 64px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  content-visibility: auto;
+  contain-intrinsic-size: 64px;
+}
+
+.dl-row:hover {
+  background: var(--bg-hover);
+}
+
+.dl-col-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dl-col-quality {
+  display: flex;
+  align-items: center;
+}
+
+.dl-col-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dl-col-size {
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-progress {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-active);
+  overflow: hidden;
+}
+
+.dl-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  transition: width 0.2s var(--ease);
+}
+
+.dl-status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dl-status-ok {
+  color: var(--success);
+}
+
+.dl-status-error {
+  color: var(--danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dl-col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.dl-icon-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--accent);
+}
+
+/* ---------------- 二次确认 ---------------- */
+
+.dl-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-2);
+}
+
+.dl-confirm strong {
+  color: var(--accent);
+  font-weight: 600;
+}

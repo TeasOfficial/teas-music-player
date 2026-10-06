@@ -1,0 +1,54 @@
+/* 每日推荐页专属样式：其余布局复用 styles/pages.css 的通用类 */
+
+.daily-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.daily-head-icon {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.daily-reasons {
+  margin-top: 26px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--glass-weak);
+  border: 1px solid var(--glass-border);
+}
+
+.daily-reason-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.daily-reason-item {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.daily-reason-title {
+  width: 200px;
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+
+.daily-reason-text {
+  color: var(--text-3);
+}

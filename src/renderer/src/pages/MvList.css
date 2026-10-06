@@ -1,0 +1,11 @@
+/* MV 列表页专属样式 */
+
+/* 标签页 + 已加载数量 + 刷新 的同排工具条 */
+.mv-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}

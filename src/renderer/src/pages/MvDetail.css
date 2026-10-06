@@ -1,0 +1,30 @@
+/* MV 播放页专属样式 */
+
+/* 标题 + 发布信息 + 统计 + 操作按钮 的纵向区块 */
+.mv-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0 4px;
+}
+
+/* 视频简介正文 */
+.mv-desc {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.85;
+  white-space: pre-wrap;
+  padding: 4px 2px 0;
+}
+
+/* 播放地址取不到时，在 16:9 的黑色播放器里居中提示 */
+.mv-video-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-3);
+}

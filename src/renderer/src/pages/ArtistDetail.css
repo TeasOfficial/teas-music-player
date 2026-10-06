@@ -1,0 +1,17 @@
+/* 歌手详情页专属样式 */
+
+/* .tabs 是 inline-flex，单独用时需要自己撑开上下间距 */
+.artist-tabs {
+  margin: 18px 0 6px;
+}
+
+/* 别名行：弱化显示，避免和歌手名抢视线 */
+.artist-alias {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+/* 简介里保留了网易云的换行，交给 pre-wrap 呈现 */
+.artist-bio {
+  white-space: pre-wrap;
+}

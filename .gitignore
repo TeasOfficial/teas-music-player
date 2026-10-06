@@ -1,0 +1,15 @@
+node_modules
+out
+dist
+.api-bundle
+release
+*.log
+.DS_Store
+
+# 薄壳本地缓存与运行残留
+.api-cache/
+.fresh-userdata/
+dev.log
+
+# 注意：src/shared/moduleNames.ts 必须提交 —— 壳里没有 API 源码，
+# 构建时无法生成它（gen-modules.mjs 会沿用已提交的清单）。

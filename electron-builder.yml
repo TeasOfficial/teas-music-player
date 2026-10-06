@@ -1,0 +1,91 @@
+# electron-builder 配置
+#
+# 这是一个「薄壳」：安装包里**不含**后端 API 源码。
+# 首次启动时由主进程从 npm 拉取最新版 NeteaseCloudMusicApiEnhanced
+# （见 src/main/api/fetcher.ts + loader.ts），装到用户数据目录后加载。
+appId: com.teas.musicplayer
+productName: Teas Music Player
+copyright: Copyright © 2024
+
+directories:
+  output: release
+  buildResources: resources
+
+# 直接复用 node_modules 里已经下载好的 Electron 运行时，
+# 避免打包时再从 GitHub 拉一份发行包（国内网络下经常超时）。
+# 如需让 electron-builder 自行下载，删掉这一行并配置 ELECTRON_MIRROR 即可。
+electronDist: node_modules/electron/dist
+
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/{.git,.github,docs,scripts}'
+  # 壳的运行依赖都已被 electron-vite 打进 out/，不必随包再带一份 node_modules
+  - '!node_modules/**/*'
+
+extraResources:
+  # 随包分发许可文本：既满足 MIT「保留版权声明」的要求，
+  # 也让许可协议页里那句「见安装目录下的 LICENSE 文件」成立。
+  - from: LICENSE
+    to: LICENSE
+  - from: THIRD-PARTY-NOTICES.md
+    to: THIRD-PARTY-NOTICES.md
+  - from: resources
+    to: resources
+    filter:
+      - '**/*'
+      # 下面这些只是安装向导的素材，编译进安装包即可，不必随应用分发
+      - '!installer*.bmp'
+      - '!installer*.ico'
+      - '!uninstaller*.bmp'
+      - '!installer.nsh'
+
+asar: true
+asarUnpack:
+  - resources/**
+
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Teas Music Player
+  # 文件名里不放空格，避免命令行/下载时被转义
+  artifactName: Teas-Music-Player-${version}-setup.${ext}
+
+  # 固定简体中文向导（2052 = zh-CN 的 LCID），不跟随系统语言
+  language: 2052
+
+  # 页面与文案定制；顶部横幅/左侧大图必须走配置，见下方说明
+  include: installer.nsh
+
+  # 以下路径都相对于 buildResources（即 resources/），写成裸文件名即可
+  installerIcon: installerIcon.ico
+  # MUI 只认 BMP：横幅 150x57、欢迎/完成页侧图 164x314
+  installerHeader: installerHeader.bmp
+  installerSidebar: installerSidebar.bmp
+  uninstallerSidebar: uninstallerSidebar.bmp
+
+mac:
+  icon: resources/icon.png
+  category: public.app-category.music
+  target:
+    - dmg
+
+linux:
+  icon: resources/icon.png
+  category: Audio
+  target:
+    - AppImage
+
+# 不配置发布渠道，避免误触发自动上传
+publish: null

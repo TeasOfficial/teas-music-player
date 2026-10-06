@@ -1,0 +1,48 @@
+{
+  "name": "teas-music-player",
+  "productName": "Teas Music Player",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Teas Music Player：网易云音乐桌面薄壳。安装包不含后端 API，首次启动从 npm 拉取最新 NeteaseCloudMusicApiEnhanced 并在进程内加载。",
+  "author": "TeasOfficial",
+  "license": "MIT",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "gen:modules": "node scripts/gen-modules.mjs",
+    "predev": "node scripts/gen-modules.mjs && node scripts/check-css-tokens.mjs",
+    "dev": "electron-vite dev",
+    "prebuild": "node scripts/gen-modules.mjs && node scripts/check-css-tokens.mjs",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "api:fetch": "node scripts/fetch-api.mjs",
+    "api:verify": "node scripts/fetch-api.mjs --verify",
+    "dist": "npm run build && npm run installer:assets && electron-builder --config electron-builder.yml",
+    "dist:dir": "npm run build && npm run installer:assets && electron-builder --config electron-builder.yml --dir",
+    "check:css": "node scripts/check-css-tokens.mjs",
+    "installer:assets": "node scripts/make-installer-assets.mjs"
+  },
+  "dependencies": {
+    "music-metadata": "^11.16.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "clsx": "^2.1.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "zustand": "^5.0.15"
+  }
+}

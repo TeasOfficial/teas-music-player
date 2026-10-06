@@ -1,0 +1,1175 @@
+/* ==========================================================================
+   应用外壳与极光背景
+   ========================================================================== */
+
+.app-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--aurora-base);
+}
+
+/* ---- 背景层：极光渐变 + 当前封面虚化 ---- */
+
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora-base {
+  position: absolute;
+  inset: -25%;
+  background:
+    radial-gradient(38% 42% at 18% 22%, var(--aurora-1) 0%, transparent 62%),
+    radial-gradient(42% 40% at 82% 18%, var(--aurora-2) 0%, transparent 60%),
+    radial-gradient(46% 44% at 72% 82%, var(--aurora-3) 0%, transparent 62%),
+    radial-gradient(40% 40% at 22% 78%, var(--aurora-4) 0%, transparent 60%),
+    var(--aurora-base);
+  filter: blur(70px) saturate(140%);
+  animation: aurora-drift 42s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2.5%, -2%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-2.5%, 2.5%, 0) scale(1.04);
+  }
+}
+
+/* 当前播放封面：极度虚化后铺满，让整块背景跟着歌走 */
+.aurora-cover {
+  position: absolute;
+  inset: -20%;
+  background-image: var(--cover-url, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(90px) saturate(200%);
+  opacity: var(--cover-backdrop-opacity);
+  transition: opacity 0.9s var(--ease);
+}
+
+.aurora-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--aurora-veil);
+}
+
+.app-body,
+.titlebar,
+.player-bar {
+  position: relative;
+  z-index: 1;
+}
+
+/* 标题栏必须高过内容区和播放条：
+   三者同为 z-index 1 时按 DOM 顺序绘制，内容区在标题栏之后，会盖住标题栏的子树 ——
+   标题栏里展开的个人中心面板（自身 z-index 再大）因此完全看不见。 */
+.titlebar {
+  z-index: 30;
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+  padding: 0 12px 10px;
+}
+
+/* ==========================================================================
+   标题栏（透明，浮在极光上）
+   ========================================================================== */
+
+.titlebar {
+  position: relative;
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 14px;
+  flex-shrink: 0;
+}
+
+.titlebar-mac {
+  padding-left: 88px;
+}
+
+.titlebar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.titlebar-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 268px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  background: var(--glass-weak);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(var(--glass-saturate));
+  transition:
+    background 0.18s var(--ease),
+    box-shadow 0.18s var(--ease);
+}
+
+.titlebar-search:focus-within {
+  background: var(--glass);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.titlebar-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12.5px;
+  padding: 0 6px;
+}
+
+.titlebar-search input::placeholder {
+  color: var(--text-3);
+}
+
+.titlebar-search-icon {
+  color: var(--text-3);
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.titlebar-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-left: 6px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.titlebar-avatar-open {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ==========================================================================
+   个人中心面板：标题栏头像展开，结构参考官方客户端的账号面板
+   ========================================================================== */
+
+.account-panel {
+  position: absolute;
+  top: calc(var(--titlebar-h) + 4px);
+  right: 12px;
+  width: 340px;
+  z-index: 400;
+  padding: 14px;
+  border-radius: var(--radius-xl);
+  background: var(--glass-solid);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-lg);
+  animation: menu-in var(--dur-2) var(--ease-out) both;
+  transform-origin: top right;
+}
+
+.account-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 2px 12px;
+}
+
+.account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.account-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  max-width: 200px;
+}
+
+.account-vip {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #f8dc8b, #dfa63a);
+  color: #3b2a05;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.account-sign {
+  max-width: 232px;
+}
+
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.account-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-out);
+}
+
+.account-stat:hover {
+  background: var(--bg-hover);
+}
+
+.account-stat b {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.account-stat span {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.account-signin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 0 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-weak);
+  border: 1px solid var(--glass-border);
+}
+
+.account-signin-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.account-signin-text .bold {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.account-signin .btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  font-size: 12.5px;
+}
+
+.account-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 10px;
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out);
+}
+
+.account-item > span {
+  flex: 1;
+}
+
+.account-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.account-item-arrow {
+  flex-shrink: 0;
+  opacity: 0.35;
+}
+
+.account-item-danger:hover {
+  color: var(--accent-2);
+}
+
+.account-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--glass-border);
+}
+
+.login-btn {
+  height: 28px;
+  padding: 0 15px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-left: 6px;
+  box-shadow: 0 6px 16px rgba(10, 132, 255, 0.32);
+}
+
+.login-btn:hover {
+  background: var(--accent-hover);
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+  align-self: stretch;
+}
+
+.window-btn {
+  width: 42px;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+
+.window-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.window-btn-close:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ==========================================================================
+   侧边栏：悬浮玻璃胶囊
+   ========================================================================== */
+
+.sidebar {
+  position: relative;
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-xl);
+  background: var(--glass-weak);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+  transition: width 0.26s var(--ease);
+}
+
+.sidebar-collapsed {
+  width: 66px;
+}
+
+/* 侧边栏顶部的应用标识 */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  padding: 14px 16px 10px;
+  overflow: hidden;
+}
+
+.sidebar-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-brand-text {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 14px 0 10px;
+}
+
+.sidebar-collapsed .sidebar-brand-text {
+  display: none;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 10px 16px;
+  min-height: 0;
+}
+
+.sidebar-group {
+  margin-bottom: 16px;
+}
+
+.sidebar-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+}
+
+.sidebar-collapsed .sidebar-group-title {
+  justify-content: center;
+  padding: 6px 0;
+  color: transparent;
+  overflow: hidden;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 36px;
+  padding: 0 12px;
+  margin: 2px 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 13px;
+  transition:
+    background 0.18s var(--ease),
+    color 0.18s var(--ease);
+}
+
+.sidebar-link:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.sidebar-link-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(10, 132, 255, 0.32);
+}
+
+.sidebar-link-playlist {
+  height: 34px;
+  gap: 9px;
+}
+
+.sidebar-link-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-collapsed .sidebar-link {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-collapsed .sidebar-link-label,
+.sidebar-collapsed .sidebar-count {
+  display: none;
+}
+
+.sidebar-count {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--glass);
+  color: var(--text-2);
+  font-size: 10.5px;
+  display: grid;
+  place-items: center;
+}
+
+.sidebar-count-active {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.sidebar-link-active .sidebar-count {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.sidebar-hint {
+  padding: 6px 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.sidebar-playlist-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-2-soft);
+  color: var(--accent-2);
+}
+
+.sidebar-toggle {
+  height: 30px;
+  margin: 0 10px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  display: grid;
+  place-items: center;
+  transition: background 0.16s var(--ease);
+}
+
+.sidebar-toggle:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+/* ==========================================================================
+   内容区：主玻璃面板
+   ========================================================================== */
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  border-radius: var(--radius-xl);
+  background: var(--glass-weak);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(40px) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+  padding-bottom: 28px;
+  overflow-x: hidden;
+}
+
+/* ==========================================================================
+   启动占位
+   ========================================================================== */
+
+.boot-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-2);
+  text-align: center;
+  padding: 40px;
+  background: var(--aurora-base);
+}
+
+.boot-hint {
+  line-height: 1.9;
+}
+
+.boot-hint code {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--glass);
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   播放条：悬浮玻璃 dock
+   ========================================================================== */
+
+.player-bar {
+  height: var(--player-h);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 12px 12px;
+  padding: 0 18px;
+  border-radius: var(--radius-xl);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+}
+
+.player-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 320px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.player-cover {
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  animation: cover-swap var(--dur-3) var(--ease-out);
+}
+
+.player-song-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-song-name {
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 210px;
+}
+
+.player-song-artist {
+  font-size: 12px;
+  color: var(--text-3);
+  max-width: 210px;
+}
+
+.player-song-empty {
+  font-size: 13px;
+}
+
+.player-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.play-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 22px rgba(10, 132, 255, 0.4);
+  transition:
+    transform 0.16s var(--ease),
+    background 0.16s var(--ease);
+}
+
+.play-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: scale(1.07);
+}
+
+.play-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.play-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.play-btn-large {
+  width: 54px;
+  height: 54px;
+}
+
+.player-extra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
+
+.player-quality {
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.player-quality:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+}
+
+.progress-time {
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: center;
+}
+
+.progress-slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.volume-slider {
+  width: 88px;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   播放队列：右侧玻璃抽屉
+   ========================================================================== */
+
+/* 队列抽屉：靠 display + @starting-style 做真实进出场，
+   组件不再在关闭时 return null（否则元素被卸载，退场动画无从谈起） */
+.queue-panel {
+  position: absolute;
+  top: calc(var(--titlebar-h) + 4px);
+  right: 12px;
+  bottom: calc(var(--player-h) + 22px);
+  width: 364px;
+  border-radius: var(--radius-xl);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-lg);
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 50;
+  display: none;
+  opacity: 0;
+  transform: translateX(20px) scale(0.98);
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-3) var(--ease-out),
+    display var(--dur-3) allow-discrete;
+}
+
+.queue-panel-open {
+  display: flex;
+  opacity: 1;
+  transform: none;
+}
+
+/* 歌曲评论抽屉：与播放队列同位置同质感，两者互斥 */
+.comment-drawer {
+  position: absolute;
+  top: calc(var(--titlebar-h) + 4px);
+  right: 12px;
+  bottom: calc(var(--player-h) + 22px);
+  width: 400px;
+  border-radius: var(--radius-xl);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-lg);
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 55;
+  display: none;
+  opacity: 0;
+  transform: translateX(20px) scale(0.98);
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-3) var(--ease-out),
+    display var(--dur-3) allow-discrete;
+}
+
+.comment-drawer-open {
+  display: flex;
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  .comment-drawer-open {
+    opacity: 0;
+    transform: translateX(20px) scale(0.98);
+  }
+}
+
+.comment-drawer-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 14px 14px;
+}
+
+/* 抽屉里不需要页面级的上下留白 */
+.comment-drawer-body .comment-section {
+  margin: 0;
+  padding: 0;
+}
+
+@starting-style {
+  .queue-panel-open {
+    opacity: 0;
+    transform: translateX(20px) scale(0.98);
+  }
+}
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.queue-body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+}
+
+/* 心动模式：让「插进来的推荐」在队列里一眼可见 */
+.queue-heart-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-2-soft);
+  color: var(--accent-2);
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.queue-heart-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--accent-2);
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.14s var(--ease);
+}
+
+.queue-item:hover {
+  background: var(--bg-hover);
+}
+
+.queue-item-current {
+  background: var(--accent-soft);
+}
+
+.queue-index {
+  width: 18px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-item-current .queue-index {
+  color: var(--accent);
+}
+
+.queue-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.queue-actions {
+  display: none;
+  gap: 2px;
+}
+
+.queue-item:hover .queue-actions {
+  display: flex;
+}
+
+/* ==========================================================================
+   全屏正在播放
+   ========================================================================== */
+
+.now-playing {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--aurora-base);
+  display: none;
+  opacity: 0;
+  transform: translateY(3%) scale(0.992);
+  transition:
+    opacity var(--dur-3) var(--ease-out),
+    transform var(--dur-4) var(--ease-out),
+    display var(--dur-4) allow-discrete;
+}
+
+.now-playing-open {
+  display: flex;
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  .now-playing-open {
+    opacity: 0;
+    transform: translateY(4%) scale(0.992);
+  }
+}
+
+/* 内容分两拍进场：封面先动，文字与控件随后跟上 */
+.now-playing-open .now-playing-left {
+  animation: item-enter var(--dur-4) var(--ease-out) 40ms both;
+}
+
+.now-playing-open .now-playing-right {
+  animation: item-enter var(--dur-4) var(--ease-out) 120ms both;
+}
+
+.now-playing-open .now-playing-controls {
+  animation: item-enter var(--dur-4) var(--ease-out) 160ms both;
+}
+
+.now-playing-bg {
+  position: absolute;
+  inset: -100px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(70px) saturate(190%);
+  opacity: 0.7;
+  transform: scale(1.2);
+}
+
+.now-playing-mask {
+  position: absolute;
+  inset: 0;
+  background: var(--aurora-veil);
+}
+
+.now-playing-close {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px);
+}
+
+/* 把「封面栏 + 歌词栏」作为一个整体水平居中。
+   不能让歌词栏 flex:1 吃掉剩余空间 —— 那样宽屏下歌词会贴在右侧，
+   左边留出一条大缝，整个页面看着又空又偏。 */
+/* 外层滚动容器：封面那一列 + 下方整宽的评论区。
+   歌词有自己独立的滚动，所以滚轮在歌词上不会带动这里。 */
+.now-playing-body {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 一首歌一屏：封面 + 歌词正好占满，往下滚才是评论 */
+  scroll-behavior: smooth;
+}
+
+.now-playing-stage {
+  /* 必须是「确定高度」而不是 min-height：min-height 只是下限，
+     flex 子项仍会按内容撑高 —— 歌词列表会把整页撑成一万多像素，
+     既看不见内容、歌词也不会内部滚动。 */
+  height: 100%;
+  min-height: 560px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  gap: 56px;
+  padding: 52px 64px 8px;
+}
+
+.now-playing-comments {
+  padding: 8px 72px 40px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.now-playing-left {
+  width: 400px;
+  flex: 0 0 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.now-playing-disc {
+  border-radius: 50%;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+}
+
+.now-playing-disc-spin {
+  animation: disc-spin 22s linear infinite;
+}
+
+@keyframes disc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.now-playing-meta {
+  text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.now-playing-title {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.now-playing-artists {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.now-playing-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.now-playing-right {
+  flex: 0 1 620px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+/* 歌词下方的评论区：和歌词同一个滚动容器，滚轮直接滚下来 */
+.lyric-footer {
+  margin-top: 34px;
+  padding: 0 6px 28px;
+}
+
+.now-playing-lyric {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 全屏页字号比侧栏歌词更大，撑住这块空间 */
+.now-playing .lyric-line {
+  font-size: 19px;
+  padding: 14px 18px;
+}
+
+/* 全屏页里歌词居中，跟桌面歌词窗口保持一致 */
+.now-playing .lyric-line {
+  text-align: center;
+}
+
+.now-playing .lyric-line-active {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+/* 底部做成一整条玻璃 dock（控制 / 进度 / 工具三组），
+   原先只有四个按钮加一条 520px 的进度条，铺不满显得很空 */
+.now-playing-controls {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin: 0 72px 26px;
+  padding: 13px 22px;
+  border-radius: var(--radius-xl);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-shadow);
+}
+
+.now-playing-progress {
+  flex: 1;
+  min-width: 220px;
+  max-width: none;
+}
+
+.now-playing-progress .progress-row {
+  max-width: none;
+}

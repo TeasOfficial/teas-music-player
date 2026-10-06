@@ -1,0 +1,538 @@
+/* ==========================================================================
+   Aurora Glass —— 设计令牌
+   参考 iOS 的「材质分层」：最底层是流动的彩色极光 + 当前封面虚化，
+   上层是不同厚度的毛玻璃面板（厚度用 --glass / --glass-strong 区分）。
+   全站颜色只允许来自这里，页面级 CSS 一律用 var()。
+   ========================================================================== */
+
+:root {
+  /* ---- 主色（默认深色玻璃） ---- */
+  --accent: #0a84ff;
+  --accent-hover: #3d9dff;
+  --accent-soft: rgba(10, 132, 255, 0.18);
+  --accent-contrast: #ffffff;
+
+  /* 第二强调色：收藏 / 喜欢 / 危险操作 */
+  --accent-2: #ff375f;
+  --accent-2-soft: rgba(255, 55, 95, 0.18);
+
+  --success: #30d158;
+  --warning: #ffd60a;
+  --danger: #ff453a;
+  --danger-soft: rgba(255, 69, 58, 0.18);
+
+  /* ---- 玻璃材质 ---- */
+  --glass-weak: rgba(255, 255, 255, 0.06);
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-strong: rgba(22, 24, 33, 0.62);
+  --glass-solid: rgba(20, 22, 30, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.28);
+  --glass-blur: 30px;
+  --glass-saturate: 180%;
+  --glass-shadow:
+    0 10px 34px rgba(0, 0, 0, 0.3), inset 0 1px 0 var(--glass-highlight);
+
+  /* ---- 文字 ---- */
+  --text: #f6f7fb;
+  --text-2: rgba(246, 247, 251, 0.74);
+  --text-3: rgba(246, 247, 251, 0.46);
+  --text-inverse: #ffffff;
+
+  /* ---- 交互底色 ---- */
+  --bg-hover: rgba(255, 255, 255, 0.09);
+  --bg-active: rgba(255, 255, 255, 0.15);
+
+  /* ---- 背景（极光） ---- */
+  --aurora-1: #4b2ea8;
+  --aurora-2: #0a5bd6;
+  --aurora-3: #b8246f;
+  --aurora-4: #0d8f8f;
+  --aurora-base: #07080d;
+  --aurora-veil: linear-gradient(
+    180deg,
+    rgba(7, 8, 13, 0.34) 0%,
+    rgba(7, 8, 13, 0.72) 100%
+  );
+  --cover-backdrop-opacity: 0.62;
+
+  /* ---- 形状与阴影 ---- */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 12px 34px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 26px 70px rgba(0, 0, 0, 0.45);
+
+  /* ---- 布局尺寸 ---- */
+  --titlebar-h: 48px;
+  --player-h: 84px;
+  --sidebar-w: 216px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  /* 注意：动效里统一用 --ease-out。曾漏定义过它，导致所有引用该变量的
+     transition / animation 声明在 computed-value 阶段整条失效（回退成 all 0s），
+     表现为「全站动效静默消失」。改动这里请顺手跑 pnpm check:css。 */
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.44, 1);
+
+  /* ---- 动效时长：统一走这四档，避免各处各写一个数 ---- */
+  --dur-1: 120ms; /* 微反馈：hover / 按下 */
+  --dur-2: 200ms; /* 常规状态切换 */
+  --dur-3: 300ms; /* 浮层进出 */
+  --dur-4: 420ms; /* 页面级进场 */
+}
+
+/* ==========================================================================
+   浅色玻璃：同一套结构，换成白色材质与更柔和的阴影
+   ========================================================================== */
+
+:root[data-theme='light'] {
+  --accent: #007aff;
+  --accent-hover: #3395ff;
+  --accent-soft: rgba(0, 122, 255, 0.14);
+  --accent-2: #ff2d55;
+  --accent-2-soft: rgba(255, 45, 85, 0.14);
+
+  --glass-weak: rgba(255, 255, 255, 0.5);
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.72);
+  --glass-solid: rgba(250, 250, 253, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-highlight: rgba(255, 255, 255, 0.95);
+  --glass-shadow:
+    0 10px 30px rgba(40, 60, 120, 0.14), inset 0 1px 0 var(--glass-highlight);
+
+  --text: #10121a;
+  --text-2: rgba(16, 18, 26, 0.68);
+  --text-3: rgba(16, 18, 26, 0.42);
+
+  --bg-hover: rgba(255, 255, 255, 0.7);
+  --bg-active: rgba(255, 255, 255, 0.92);
+
+  --aurora-1: #b9c8ff;
+  --aurora-2: #a5d8ff;
+  --aurora-3: #ffc9dd;
+  --aurora-4: #b8f0e6;
+  --aurora-base: #eef1f8;
+  --aurora-veil: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(238, 241, 248, 0.8) 100%
+  );
+  --cover-backdrop-opacity: 0.35;
+
+  --shadow-sm: 0 2px 8px rgba(40, 60, 120, 0.1);
+  --shadow-md: 0 12px 30px rgba(40, 60, 120, 0.16);
+  --shadow-lg: 0 26px 60px rgba(40, 60, 120, 0.22);
+}
+
+/* ==========================================================================
+   基础重置
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text',
+    'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--aurora-base);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  display: block;
+}
+
+ul,
+ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+/* iOS 风格细滚动条：静止时隐形，滚动区域悬停才浮现 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: content-box;
+}
+
+/* ==========================================================================
+   通用工具类
+   ========================================================================== */
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.gap-4 {
+  gap: 4px;
+}
+.gap-6 {
+  gap: 6px;
+}
+.gap-8 {
+  gap: 8px;
+}
+.gap-12 {
+  gap: 12px;
+}
+.gap-16 {
+  gap: 16px;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.text-2 {
+  color: var(--text-2);
+}
+
+.f-11 {
+  font-size: 11px;
+}
+.f-12 {
+  font-size: 12px;
+}
+.f-13 {
+  font-size: 13px;
+}
+.f-14 {
+  font-size: 14px;
+}
+.f-16 {
+  font-size: 16px;
+}
+.f-20 {
+  font-size: 20px;
+}
+.f-24 {
+  font-size: 24px;
+}
+
+.bold {
+  font-weight: 600;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.hoverable {
+  transition: background 0.16s var(--ease);
+}
+
+.hoverable:hover {
+  background: var(--bg-hover);
+}
+
+.link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.scroll-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.fade-in {
+  animation: fade-in 0.3s var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--glass-weak) 0%,
+    var(--glass) 50%,
+    var(--glass-weak) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.5s ease infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ==========================================================================
+   动效：关键帧与页面过渡
+   ========================================================================== */
+
+/* 页面进场（无 View Transition 时的兜底） */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 列表项逐个浮现 */
+@keyframes item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 心跳：喜欢按钮点亮时弹一下 */
+@keyframes like-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.34);
+  }
+  70% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 封面换图 */
+@keyframes cover-swap {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- View Transitions：只让内容区交叉淡入，外壳保持不动 ---- */
+
+.app-main {
+  view-transition-name: app-content;
+}
+
+/* root 快照不参与动画：标题栏 / 侧边栏 / 播放条因此不会跟着闪 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(app-content) {
+  animation: vt-out var(--dur-2) var(--ease-out) both;
+}
+
+::view-transition-new(app-content) {
+  animation: vt-in var(--dur-3) var(--ease-out) both;
+}
+
+@keyframes vt-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.994);
+  }
+}
+
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.994);
+  }
+}
+
+/* 过渡由浏览器快照接管时，内容区自身不要再播一遍进场动画 */
+:root[data-vt] .page {
+  animation: none;
+}
+
+/* 尊重系统的「减少动态效果」 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

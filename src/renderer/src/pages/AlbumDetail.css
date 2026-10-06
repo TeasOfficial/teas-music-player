@@ -1,0 +1,15 @@
+/* 专辑详情页专属样式 */
+
+/* 发行信息行：把公司/时间拉开一点，避免挤成一团 */
+.album-hero-meta {
+  gap: 14px;
+}
+
+/* 专辑简介正文，保留上游返回的换行与缩进 */
+.album-desc {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.85;
+  white-space: pre-wrap;
+  padding: 4px 2px 0;
+}
