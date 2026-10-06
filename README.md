@@ -276,10 +276,16 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
 
 ## 许可
 
-本仓库以 **MIT** 许可发布（见 [`LICENSE`](./LICENSE)，其中逐字保留了上游
-`Copyright (c) 2013-2022 Binaryify` 的声明）。运行时会拉取并执行上游
-`@neteasecloudmusicapienhanced/api`，其出处、许可与安全约束见
-[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md)。
+本仓库以 **MIT** 许可发布。
+
+- [`LICENSE`](./LICENSE) 是**逐字未改**的 MIT 原文，保留上游
+  `Copyright (c) 2013-2022 Binaryify` 的声明。MIT 要求在所有副本中保留该声明，
+  因此这份文件不做任何追加修改（追加会导致 GitHub 无法识别许可类型）。
+- [`NOTICE`](./NOTICE) 说明本项目的版权归属与所依据的上游作品。
+- [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) 列出运行时拉取的上游包、
+  其出处与许可，以及下载执行路径上的安全约束。
+
+三份文件都会随安装包分发（见 `electron-builder.yml` 的 `extraResources`）。
 
 所有音乐内容、接口与商标归网易云音乐所有，本项目与官方无关联，
 仅供学习与技术研究使用，请勿用于商业用途。

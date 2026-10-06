@@ -1,0 +1,24 @@
+Teas Music Player
+Copyright (c) 2026 TeasOfficial
+
+This product is licensed under the MIT License. The full, unmodified license text
+is in the LICENSE file of this repository.
+
+The LICENSE file keeps the original copyright notice
+(`Copyright (c) 2013-2022 Binaryify`) verbatim, because this project is derived
+from the following MIT-licensed works and MIT requires that notice to be preserved:
+
+  * NeteaseCloudMusicApi            https://github.com/binaryify/NeteaseCloudMusicApi
+                                    Copyright (c) 2013-2022 Binaryify
+  * NeteaseCloudMusicApiEnhanced    https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced
+                                    (maintained by MoeFurina since upstream v4.28.0)
+
+This repository is a desktop shell only: it does not contain the API server source.
+At runtime it downloads and executes the upstream package
+`@neteasecloudmusicapienhanced/api` from the npm registry. See
+THIRD-PARTY-NOTICES.md for the full attribution list, the security constraints
+applied to that download path, and the disclaimer.
+
+All music content, service interfaces and trademarks belong to NetEase Cloud Music.
+This project is not affiliated with or endorsed by NetEase. It is provided for
+learning and technical research purposes only.
