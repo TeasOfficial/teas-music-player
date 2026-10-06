@@ -65,29 +65,57 @@ interface TarEntry {
 
 function openTar(buffer: Buffer) {
   let offset = 0
+  /** 紧跟其后的那个条目要使用的真实路径（来自 PAX / GNU 长名扩展头） */
+  let pendingName = ''
+
+  const readHeader = (at: number) => {
+    const header = buffer.subarray(at, at + 512)
+    if (header.length < 512 || header.every((byte) => byte === 0)) return null
+    const nameRaw = header
+      .subarray(0, 100)
+      .toString('utf8')
+      .replace(/\0.*$/, '')
+    const sizeRaw = Number.parseInt(
+      header.subarray(124, 136).toString('utf8').replace(/\0.*$/, '').trim(),
+      8,
+    )
+    const size = Number.isFinite(sizeRaw) ? sizeRaw : 0
+    const typeFlag = String.fromCharCode(header[156] || 0x30)
+    const prefix = header
+      .subarray(345, 500)
+      .toString('utf8')
+      .replace(/\0.*$/, '')
+    const full = prefix ? `${prefix}/${nameRaw}` : nameRaw
+    const body = buffer.subarray(at + 512, at + 512 + size)
+    return { full, size, typeFlag, body, nextOffset: at + 512 + Math.ceil(size / 512) * 512 }
+  }
+
   return {
     next(): TarEntry | null {
-      if (offset + 512 > buffer.length) return null
-      const header = buffer.subarray(offset, offset + 512)
-      if (header.every((byte) => byte === 0)) return null
-      const nameRaw = header
-        .subarray(0, 100)
-        .toString('utf8')
-        .replace(/\0.*$/, '')
-      const sizeRaw = Number.parseInt(
-        header.subarray(124, 136).toString('utf8').replace(/\0.*$/, '').trim(),
-        8,
-      )
-      const size = Number.isFinite(sizeRaw) ? sizeRaw : 0
-      const typeFlag = String.fromCharCode(header[156] || 0x30)
-      const prefix = header
-        .subarray(345, 500)
-        .toString('utf8')
-        .replace(/\0.*$/, '')
-      const full = prefix ? `${prefix}/${nameRaw}` : nameRaw
-      const body = buffer.subarray(offset + 512, offset + 512 + size)
-      offset += 512 + Math.ceil(size / 512) * 512
-      return { full, size, typeFlag, body }
+      while (offset + 512 <= buffer.length) {
+        const entry = readHeader(offset)
+        if (!entry) return null
+        offset = entry.nextOffset
+
+        // 长名扩展头：本身不是文件，只携带下一个条目的真实路径。
+        // 不做处理的话，长路径会被 100 字节的 name 字段截断，
+        // 写入时就会撞上已建好的同名目录（EISDIR / 截断文件名）。
+        if (entry.typeFlag === 'x' || entry.typeFlag === 'X') {
+          const text = entry.body.toString('utf8')
+          const match = /(?:^|\n)\d+ path=([^\n]+)/.exec(text)
+          if (match) pendingName = match[1]
+          continue
+        }
+        if (entry.typeFlag === 'L') {
+          pendingName = entry.body.toString('utf8').replace(/\0.*$/, '').trim()
+          continue
+        }
+
+        const full = pendingName || entry.full
+        pendingName = ''
+        return { full, size: entry.size, typeFlag: entry.typeFlag, body: entry.body }
+      }
+      return null
     },
   }
 }
@@ -469,6 +497,12 @@ export async function installApiVersion(
     if (missing.length > 0) {
       note(`缺少 ${missing.length} 个生产依赖，先尝试预置包（免 npm）`)
       hooks.onProgress?.({ phase: 'deps-bundle', ratio: 0.4 })
+      const bundleUrl = depsBundleUrl(remote.version)
+      note(
+        bundleUrl
+          ? `预置包地址 ${bundleUrl}`
+          : '预置包已禁用（NCM_DEPS_BUNDLE=0），直接走 npm',
+      )
       const extracted = await installDepsFromBundle(
         destDir,
         remote.version,

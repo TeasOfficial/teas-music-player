@@ -44,22 +44,30 @@
 ```
 壳启动
  ├─ 本地有可用 API？ → 直接用（<userData>/api/versions/<version>）
- └─ 没有 → 从 npm 拉一份最新版：
-      1. 取 registry 元数据（含 dist.integrity）
-      2. 只接受 semver 形状的版本号
-      3. 下载 tarball（约 12.8MB）
-      4. sha512 校验，不匹配立即拒绝
-      5. 解包（拒绝绝对路径与 .. 逃逸）
-      6. npm install --omit=dev --ignore-scripts（约 50~90 秒，44MB）
-      7. 结构校验 + require 冒烟 + 449 接口全部可调用
-      8. 就绪，界面开始可用
+ └─ 没有 → 自动装一份（用户无需任何操作）：
+      1. 取 npm registry 元数据（含 dist.integrity），只接受 semver 版本号
+      2. 下载源码 tarball（约 12.8MB）
+      3. sha512 校验，不匹配立即拒绝
+      4. 解包（处理 PAX/GNU 长名；拒绝绝对路径与 .. 逃逸）
+      5. 装生产依赖，两条路：
+         a) 【默认】下载本项目 Release 里的依赖预置包 deps-<version>.tar.gz
+            （8.2MB，展开 44MB）直接解包 —— **不需要用户机器上有 npm/Node**
+         b) 预置包不可用时回退 `npm install --omit=dev --ignore-scripts`
+      6. 结构校验 + require 冒烟 + 接口全部可调用
+      7. 就绪，界面开始可用
 ```
 
-冷启动实测（Windows，节点 24 / npm 11）：**下载 0.9s + 装依赖 50s ≈ 51 秒**。
+冷启动实测（Windows，节点 24）：
 
-> ⚠️ **当前实现需要本机有 Node.js（含 npm）**：第 6 步会调用 npm 装生产依赖。
-> 若目标机器没有 Node，请见「离线 / 无 Node 的机器」一节。
-> 进度会实时回报到界面（阶段 + 日志行）。
+| 路径 | 耗时 | 是否需要用户有 npm |
+|---|---|---|
+| 预置包（默认） | **约 8 秒** | ❌ 不需要 |
+| 回退 npm | 51~85 秒 | ✅ 需要 |
+
+无论走哪条路，失败都会自动回退，两条都不通才报错。进度会实时回报到界面（阶段 + 日志行）。
+
+> 预置包为什么可行：上游 API 的生产依赖实测 **0 个原生模块**（纯 JS），所以一份包跨平台通用；
+> 包内不含安装脚本，解包即用。生成方式见 `scripts/build-deps-bundle.mjs`。
 
 ### 安全边界
 
@@ -90,9 +98,8 @@
 
 ## 环境要求
 
-- Node.js ≥ 20（推荐 22/24）
-- npm（首次启动要装后端依赖，见上）
-- 打包安装器时需要 Node；运行已打包程序时同样需要 npm 来完成首次安装
+- **运行已打包的程序：不需要任何前置环境**（依赖预置包，见上）
+- 从源码开发/打包：Node.js ≥ 20（推荐 22/24）与 npm
 
 ## 快速开始
 
@@ -121,7 +128,7 @@ npm run api:fetch -- --to ./api-bundle
 NCM_API_ROOT=/path/to/api-bundle <启动应用>
 ```
 
-上游本身也能这样用（`git clone` 后 `pnpm install`），只是版本升级要自己维护。
+上游本身也能这样用（`git clone` 后装好依赖即可），只是版本升级要自己维护。
 若要让安装包自带一份兜底副本，把上面的目录塞进 `electron-builder.yml` 的
 `extraResources` 到 `resources/api`，`loader.ts` 会自动识别。
 
@@ -157,6 +164,7 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
 | `npm run typecheck` | 主进程 + 渲染进程分别做类型检查             |
 | `npm run api:fetch` | 拉取后端到 `.api-cache/`                    |
 | `npm run api:verify`| 拉取 + 真实请求验证（推荐首次接入时跑一次） |
+| `npm run deps:bundle` | 从已装好的 API 目录产出依赖预置包 |
 | `npm run gen:modules` | 重新生成接口名清单（需提供 API 源码）     |
 | `npm run check:css` | 校验 CSS 变量引用                           |
 | `npm run dist`      | 打包安装器                                  |
@@ -262,10 +270,15 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
    表现为 `Cannot read properties of undefined (reading 'isPackaged')`，
    需要 `env -u ELECTRON_RUN_AS_NODE` 再启动。
 
+8. **tar 长文件名必须处理 PAX 扩展头。** npm 的 tarball 里超过 100 字节的路径会被
+    的 PAX 头接管，若只读 512 字节头里的 name 字段，路径会被静默截断
+   （例如  变成 ），写入时撞上已建好的同名目录，
+   报出极具误导性的 。 现在会解析 // 三种扩展头。
+
 ## 已知限制
 
-- **首次启动慢**：要下载并安装后端依赖（约 50~90 秒），且**当前需要本机有 npm**。
-  后续启动直接复用已装版本，秒开。
+- **首次启动需要联网**：约 8 秒（源码 12.8MB + 依赖预置包 8.2MB）。
+  若依赖预置包不可用则回退 npm（50~90 秒，且需要本机有 npm）。后续启动直接复用已装版本，秒开。
 - **上游风控**：接口由网易云官方服务提供，偶发 460/风控/无版权属正常现象；播放地址取不到时
   会自动降级音质，仍失败则提示「无版权或需要会员」。
 - **登录**：仅支持扫码与 Cookie 导入，不保存账号密码（上游账号密码登录接口风控较严）。
