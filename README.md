@@ -270,10 +270,11 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
    表现为 `Cannot read properties of undefined (reading 'isPackaged')`，
    需要 `env -u ELECTRON_RUN_AS_NODE` 再启动。
 
-8. **tar 长文件名必须处理 PAX 扩展头。** npm 的 tarball 里超过 100 字节的路径会被
-    的 PAX 头接管，若只读 512 字节头里的 name 字段，路径会被静默截断
-   （例如  变成 ），写入时撞上已建好的同名目录，
-   报出极具误导性的 。 现在会解析 // 三种扩展头。
+8. **tar 长文件名必须处理 PAX 扩展头。** npm 的 tarball 里超过 100 字节的路径由
+   `typeflag='x'` 的 PAX 头携带，若只读那 512 字节头里的 name 字段，路径会被**静默截断**
+   （例如 `encodings/tables/…` 变成 `encodings/tabl`），写入时撞上先前已建好的同名目录，
+   报出极具误导性的 `EISDIR`（看起来像权限或长路径问题，其实是解析器丢了信息）。
+   `openTar()` 现在会解析 `x` / `X` / `L` 三种扩展头。
 
 ## 已知限制
 
