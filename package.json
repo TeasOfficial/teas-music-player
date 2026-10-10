@@ -1,7 +1,7 @@
 {
   "name": "teas-music-player",
   "productName": "Teas Music Player",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Teas Music Player：网易云音乐桌面薄壳。安装包不含后端 API，首次启动从 npm 拉取最新 NeteaseCloudMusicApiEnhanced 并在进程内加载。",
   "author": "TeasOfficial",
@@ -12,7 +12,7 @@
     "predev": "node scripts/gen-modules.mjs && node scripts/check-css-tokens.mjs",
     "dev": "electron-vite dev",
     "prebuild": "node scripts/gen-modules.mjs && node scripts/check-css-tokens.mjs",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node scripts/strip-crossorigin.mjs",
     "start": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

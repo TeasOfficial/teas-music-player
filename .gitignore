@@ -16,3 +16,6 @@ dev.log
 
 # 依赖预置包只作为 GitHub Release 附件分发，不进 git 历史（8MB+）
 dist-assets/
+
+# 本地调试产物（截图/一次性脚本）：绝不入库
+.tmp-*

@@ -350,6 +350,76 @@ export function depsBundleUrl(version: string): string {
 }
 
 /**
+ * 依赖预置包的下载超时。
+ *
+ * 实测：GitHub Release 附件在国内网络下可能只有 ~6KB/s（8.2MB 要 20 分钟以上），
+ * 而 npm registry 有 ~100KB/s。所以这里刻意给一个**较短的超时**：
+ * 拿不到就快速回退 npm，而不是让用户在「正在获取依赖预置包」上干等几分钟。
+ * 可用 NCM_DEPS_BUNDLE_TIMEOUT_MS 调整。
+ */
+function depsBundleTimeoutMs(): number {
+  const raw = Number(process.env.NCM_DEPS_BUNDLE_TIMEOUT_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 10_000
+}
+
+/**
+ * 带进度地下载预置包：边读边报「已下载多少」，并在拉取过程中汇报进度，
+ * 让界面上的数字真的在动（否则 20 秒静默和卡死无法区分）。
+ */
+async function downloadBundle(
+  url: string,
+  onLine?: (line: string) => void,
+): Promise<Buffer | null> {
+  const controller = new AbortController()
+  const timeoutMs = depsBundleTimeoutMs()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: 'follow' })
+    if (!res.ok) {
+      onLine?.(`预置包不可用（HTTP ${res.status}），将回退 npm`)
+      return null
+    }
+    const total = Number(res.headers.get('content-length')) || 0
+    if (!res.body) {
+      const buffer = Buffer.from(await res.arrayBuffer())
+      return buffer
+    }
+    const chunks: Buffer[] = []
+    let received = 0
+    let lastReport = 0
+    const reader = res.body.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        chunks.push(Buffer.from(value))
+        received += value.length
+        // 每 25% 报一次，让用户看到确实在走
+        if (received - lastReport > Math.max(256 * 1024, total * 0.25)) {
+          lastReport = received
+          onLine?.(
+            total > 0
+              ? `预置包下载中 ${(received / 1024 / 1024).toFixed(1)}/${(total / 1024 / 1024).toFixed(1)} MB`
+              : `预置包下载中 ${(received / 1024 / 1024).toFixed(1)} MB`,
+          )
+        }
+      }
+    }
+    return Buffer.concat(chunks)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    onLine?.(
+      /abort/i.test(reason)
+        ? `预置包下载超过 ${Math.round(timeoutMs / 1000)} 秒仍未完成，改用 npm 安装`
+        : `预置包下载失败（${reason}），改用 npm 安装`,
+    )
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * 下载依赖预置包并解到 `<destDir>/node_modules`。
  * 返回实际解出的文件数；任何一步失败都返回 0（由调用方回退到 npm）。
  */
@@ -362,19 +432,8 @@ async function installDepsFromBundle(
   if (!url) return 0
   try {
     onLine?.(`获取依赖预置包 ${url}`)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 120_000)
-    let res: Response
-    try {
-      res = await fetch(url, { signal: controller.signal, redirect: 'follow' })
-    } finally {
-      clearTimeout(timer)
-    }
-    if (!res.ok) {
-      onLine?.(`预置包不可用（HTTP ${res.status}），将回退 npm`)
-      return 0
-    }
-    const bytes = Buffer.from(await res.arrayBuffer())
+    const bytes = await downloadBundle(url, onLine)
+    if (!bytes) return 0
     onLine?.(`预置包下载完成 ${(bytes.length / 1024 / 1024).toFixed(2)} MB`)
 
     const target = path.resolve(destDir)

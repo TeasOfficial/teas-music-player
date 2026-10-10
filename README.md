@@ -274,6 +274,18 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
 7. **CI/受限 shell 里若存在 `ELECTRON_RUN_AS_NODE=1`**，Electron 会退化成纯 Node，
    表现为 `Cannot read properties of undefined (reading 'isPackaged')`，
    需要 `env -u ELECTRON_RUN_AS_NODE` 再启动。
+8. **打包版黑屏 = 产物 `<script type="module" crossorigin>` 在 `file://` 下被拦。**
+   打包版通过 `file://` 加载页面，而 Vite 默认给入口脚本与 `<link>` 加 `crossorigin`；
+   在 `file://` 下这类请求会被当成跨域而拦掉，**JS 完全不执行 → 窗口全黑**。
+   最坑的地方是主进程日志完全正常（API 加载成功、没有 `did-fail-load`、
+   渲染进程连一条 console 都没有），所以只看日志会误判成"接口问题"。
+   开发模式走 `http://localhost` 不受影响，因此**只在安装版暴露**。
+   本仓库用 `scripts/strip-crossorigin.mjs` 在 `build` 之后清理产物（见 package.json 的
+   `build` 脚本）——用后处理而不是改 Vite 配置，避免依赖其版本行为。
+
+   > 排查手法：临时删掉产物 HTML 里的 `crossorigin` 再启动，能秒级确认。
+   > 验证打包版**必须**用 `file://` 路径跑一次（`release/win-unpacked/...exe`），
+   > 只跑 `npm run dev` 或带着 `ELECTRON_RENDERER_URL` 启动都测不到这个问题。
 
 8. **tar 长文件名必须处理 PAX 扩展头。** npm 的 tarball 里超过 100 字节的路径由
    `typeflag='x'` 的 PAX 头携带，若只读那 512 字节头里的 name 字段，路径会被**静默截断**

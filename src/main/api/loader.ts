@@ -218,22 +218,35 @@ const PHASE_MESSAGE: Record<ApiProgress['phase'], string> = {
 /**
  * 把原始日志行收敛成一句人话当标题。
  * 原始行（可能含长 URL、npm 命令行）只进下方的日志区。
+ *
+ * 匹配不到时**回退到阶段文案**，而不是回退原始行 ——
+ * 否则任何未预料的长行都会把标题撑成截断的 URL。
+ * 规则顺序要求「更具体的先匹配」：例如「预置包下载完成」必须早于泛化的「下载完成」。
  */
-function friendlyMessage(text: string): string {
-  if (/下载完成/.test(text)) return '音乐接口源码下载完成'
-  if (/下载/.test(text) && /tarball|tgz|api-/.test(text)) return '正在下载音乐接口源码…'
-  if (/integrity|shasum|校验通过/.test(text)) return '源码完整性校验通过'
-  if (/解包/.test(text)) return '正在解包接口源码…'
-  if (/预置包.*(地址|获取)/.test(text)) return '正在获取依赖预置包…'
+function friendlyMessage(text: string, phase: ApiProgress['phase']): string {
+  // 依赖预置包（必须先于任何含「下载完成」的泛化规则）
+  if (/预置包.*(地址|获取)|获取依赖预置包/.test(text))
+    return '正在获取依赖预置包…'
   if (/预置包下载完成/.test(text)) return '依赖预置包下载完成'
   if (/预置包解出/.test(text)) return '正在展开依赖…'
   if (/预置包已满足|依赖已齐备|跳过 npm/.test(text)) return '依赖已就绪'
-  if (/仍缺.*npm|安装 \d+ 个生产依赖/.test(text)) return '正在用 npm 安装依赖…'
-  if (/added \d+ packages/.test(text)) return '依赖安装完成'
+  if (/回退 npm|仍缺.*依赖|缺少 \d+ 个生产依赖|安装 \d+ 个生产依赖/.test(text))
+    return '正在准备接口依赖…'
+  if (/added \d+ packages|依赖安装完成/.test(text)) return '依赖安装完成'
+
+  // 源码包
+  if (/下载完成/.test(text)) return '音乐接口源码下载完成'
+  if (/下载/.test(text) && /tarball|tgz|api-/.test(text))
+    return '正在下载音乐接口源码…'
+  if (/integrity|shasum|校验通过/.test(text)) return '源码完整性校验通过'
+  if (/解包/.test(text)) return '正在解包接口源码…'
+
+  // 自检与收尾
   if (/冒烟|接口全部可调用/.test(text)) return '正在自检接口…'
   if (/已安装 \d/.test(text)) return '安装完成'
-  if (/失败|回退/.test(text)) return '遇到问题，正在尝试备用方案…'
-  return text.length > 42 ? `${text.slice(0, 42)}…` : text
+  if (/失败/.test(text)) return '遇到问题，正在尝试备用方案…'
+
+  return PHASE_MESSAGE[phase]
 }
 
 /**
@@ -302,7 +315,7 @@ export function ensureApiReady(): Promise<{
             phase,
             // 标题只放短句；原始行（含 URL、npm 命令行）进下面日志区，
             // 否则一条命令行就能把标题撑成三行。
-            message: friendlyMessage(text),
+            message: friendlyMessage(text, phase),
             ratio,
             logLine: text,
           })
