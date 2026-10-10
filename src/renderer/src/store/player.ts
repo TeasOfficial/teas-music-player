@@ -62,6 +62,11 @@ interface PlayerState {
   context: PlayContext | null
   /** 心动模式插入的曲目（`source:id`），队列面板会给它们打标 */
   heartKeys: string[]
+  /**
+   * 心动模式里作为「回到我喜欢的音乐」插入的曲目（`source:id`）。
+   * 与 heartKeys 分开：这些不是推荐，是用户自己红心过的歌，界面标记也不同。
+   */
+  heartLikedKeys: string[]
   /** 正在查看评论的歌曲；为 null 表示评论抽屉关闭 */
   commentTarget: Song | null
   /** 打开全屏播放页并要求自动滚到评论区（点评论按钮时用，否则用户以为没有评论区） */
@@ -300,14 +305,47 @@ const PROGRESS_SAVE_STEP_MS = 5000
 const HEART_FILL_COUNT = 12
 /** 前方心动歌少于这个数就续补 */
 const HEART_AHEAD_MIN = 3
+/**
+ * 每播放多少首「心动推荐」之后插一首「我喜欢的音乐」。
+ * 原版网易云的心动模式不是纯推荐流：听几首推荐就会回到一首你自己红心的歌。
+ * 取随机区间而不是固定值，避免形成可预测的规律感。
+ */
+const HEART_LIKED_EVERY_MIN = 4
+const HEART_LIKED_EVERY_MAX = 8
+/** 一次性缓存多少首「我喜欢的」备选 */
+const HEART_LIKED_POOL_SIZE = 40
+/** 心动随机播放的防重放窗口 */
+const HEART_RECENT_LIMIT = 20
+
 /** 心动模式的推荐依据歌单（没有歌单上下文时兜底用「我喜欢的音乐」） */
 let heartPlaylistId: number | null = null
 /** 已经提示过的失败原因，避免重复弹 toast */
 const heartWarned = new Set<string>()
 /** 本次会话是否已经提示过「已加入推荐」 */
 let heartAnnounced = false
+/** 心动随机播放：最近播过的下标，避免短时间内重复 */
+const heartRecent: number[] = []
+/** 刚插入、等着下一首播的「我喜欢的」曲目键（随机播放必须显式保证它会被播到） */
+let heartPendingLiked = ''
+/** 自上次插入「我喜欢的」以来，已经播了几首心动推荐 */
+let heartSinceLiked = 0
+/** 下一次插入「我喜欢的」要等几首心动推荐 */
+let heartLikedEvery = randomLikedInterval()
+/** 「我喜欢的音乐」备选池（延迟加载，用一首取一首） */
+let heartLikedPool: number[] = []
+/** 池子里已经被排进队列的 id，避免重复插入 */
+const heartLikedUsed = new Set<number>()
 /** 上次落盘的进度，用来判断是否够一个间隔了 */
 let lastSavedProgress = -1
+
+function randomLikedInterval(): number {
+  return (
+    HEART_LIKED_EVERY_MIN +
+    Math.floor(
+      Math.random() * (HEART_LIKED_EVERY_MAX - HEART_LIKED_EVERY_MIN + 1),
+    )
+  )
+}
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
   /* ---------- 内部辅助 ---------- */
@@ -326,6 +364,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           progress: position,
           context: context ?? null,
           heartKeys: get().heartKeys,
+          heartLikedKeys: get().heartLikedKeys,
         })
         .catch(() => undefined)
     }, 800)
@@ -419,6 +458,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         scrobbledIds = new Set<number>()
         void reportScrobble(song, 0)
         void maybeFillIntelligence(song)
+        // 心动模式：统计「播了几首推荐」，够了就插一首我喜欢的
+        trackHeartProgress(get().index)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '播放失败'
@@ -549,6 +590,141 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     toast.info(message)
   }
 
+  /**
+   * 取一首「我喜欢的音乐」里、当前队列还没有的歌。
+   * 只拉一小批（而非把几百首全拉下来）——插入是低频行为，按需取更省。
+   */
+  async function takeLikedSong(): Promise<Song | null> {
+    const { likedIds, queue } = get()
+    if (likedIds.length === 0) return null
+
+    const inQueue = new Set(queue.map(songKey))
+    const queuedIds = new Set(
+      queue.filter((s) => (s.source ?? 'netease') === 'netease').map((s) => s.id),
+    )
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (heartLikedPool.length === 0) {
+        // 洗牌后取一批：避免每次都从红心列表开头挑，听感才像随机回到喜欢
+        const candidates = likedIds
+          .filter(
+            (id) => !queuedIds.has(id) && !heartLikedUsed.has(id),
+          )
+          .sort(() => Math.random() - 0.5)
+          .slice(0, HEART_LIKED_POOL_SIZE)
+        if (candidates.length === 0) return null
+        heartLikedPool = candidates
+      }
+
+      const id = heartLikedPool.shift()
+      if (id === undefined) continue
+      heartLikedUsed.add(id)
+
+      try {
+        const body = await api<{ songs?: unknown[] }>('song_detail', { ids: id })
+        const song = normalizeSong(body.songs?.[0])
+        if (!song?.id) continue
+        if (inQueue.has(songKey(song))) continue
+        return song
+      } catch {
+        continue
+      }
+    }
+    return null
+  }
+
+  /**
+   * 心动模式：每隔 HEART_LIKED_EVERY_* 首推荐，插一首「我喜欢的音乐」。
+   * 插在**当前曲目之后**，这样下一首就会播到它（与补推荐同一套做法）。
+   */
+  async function maybeInsertLikedSong(): Promise<void> {
+    const { playMode } = get()
+    if (playMode !== 'heart') return
+    if (heartSinceLiked < heartLikedEvery) return
+
+    const song = await takeLikedSong()
+    if (!song) {
+      // 没登录 / 红心列表为空 / 都已在队列里：保持纯推荐流，但重置计数避免每首重试
+      heartSinceLiked = 0
+      heartLikedEvery = randomLikedInterval()
+      return
+    }
+
+    const { queue, index } = get()
+    const next = [...queue]
+    next.splice(index + 1, 0, song)
+    set({
+      queue: next,
+      heartLikedKeys: [...get().heartLikedKeys, songKey(song)],
+    })
+    persistQueue()
+    heartPendingLiked = songKey(song)
+    heartSinceLiked = 0
+    heartLikedEvery = randomLikedInterval()
+  }
+
+  /**
+   * 心动模式的随机下一首：在队列里随机挑一个，但避开最近播过的下标。
+   * 原版心动模式是默认随机的，不是顺着歌单往下放。
+   *
+   * 注意：插进来的「我喜欢的」要**优先播**（见 heartPendingLiked）。
+   * 否则随机播放可能长时间绕过它，等于没插 —— 那就退回成纯推荐流了。
+   */
+  function pickHeartRandomIndex(): number {
+    const { queue, index } = get()
+
+    // 刚插入的「我喜欢的」必须下一首就播
+    if (heartPendingLiked) {
+      const pendingIndex = queue.findIndex(
+        (song) => songKey(song) === heartPendingLiked,
+      )
+      if (pendingIndex >= 0) {
+        heartPendingLiked = ''
+        return pendingIndex
+      }
+      heartPendingLiked = ''
+    }
+
+    if (queue.length <= 1) return index
+    const recent = new Set(heartRecent)
+    // 候选 = 全队列排除最近播过的（避免长时间只在那几首里打转）
+    let candidates = queue
+      .map((_, i) => i)
+      .filter((i) => i !== index && !recent.has(i))
+    // 候选被排空（队列比窗口还小）时放宽限制，只要求不是当前这首
+    if (candidates.length === 0) {
+      candidates = queue.map((_, i) => i).filter((i) => i !== index)
+    }
+    if (candidates.length === 0) return index
+    return candidates[Math.floor(Math.random() * candidates.length)]
+  }
+
+  /** 记录心动模式刚播过/刚进入的下标，维护防重放窗口 */
+  function noteHeartPlayed(target: number): void {
+    if (get().playMode !== 'heart') return
+    heartRecent.push(target)
+    if (heartRecent.length > HEART_RECENT_LIMIT) heartRecent.shift()
+  }
+
+  /**
+   * 心动模式下每进入一首歌时调用：
+   * 计数「心动推荐」的进度，够了就补一首「我喜欢的音乐」。
+   */
+  function trackHeartProgress(target: number): void {
+    const { playMode, queue, heartLikedKeys } = get()
+    if (playMode !== 'heart') return
+    noteHeartPlayed(target)
+
+    const song = queue[target]
+    if (!song) return
+    // 插入的「我喜欢的」不计入推荐进度，否则永远攒不满
+    const likedSet = new Set(heartLikedKeys)
+    if (likedSet.has(songKey(song))) return
+
+    heartSinceLiked += 1
+    if (heartSinceLiked >= heartLikedEvery) void maybeInsertLikedSong()
+  }
+
   async function goToIndex(target: number, autoplay = true): Promise<void> {
     const { queue } = get()
     if (queue.length === 0) return
@@ -574,7 +750,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         return candidate
       }
       case 'heart':
-        return (index + 1) % queue.length
+        // 原版心动模式默认随机播放（不是顺着歌单往下走），
+        // 并且每播几首推荐会插一首「我喜欢的音乐」——插入逻辑见 trackHeartProgress
+        return pickHeartRandomIndex()
       case 'loop':
         return (index + 1) % queue.length
       case 'order':
@@ -697,6 +875,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     level: 'exhigh',
     context: null,
     heartKeys: [],
+    heartLikedKeys: [],
     commentTarget: null,
     commentScrollPending: false,
     lyrics: EMPTY_LYRICS,
@@ -740,6 +919,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           // 还原播放来源：心动模式的推荐依据、以及播放上报的 sourceid 都依赖它
           context: (settings.lastQueue.context as PlayContext | null) ?? null,
           heartKeys: settings.lastQueue.heartKeys ?? [],
+          heartLikedKeys: settings.lastQueue.heartLikedKeys ?? [],
         })
         const song = songs[Math.min(index, songs.length - 1)]
         if (song) {
@@ -945,7 +1125,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       void window.ncm.config.set('playMode', mode).catch(() => undefined)
-      if (mode === 'heart' && current) void maybeFillIntelligence(current)
+      if (mode === 'heart' && current) {
+        // 每次进入心动模式都重新开始计推荐进度，避免沿用上一次的计数立刻插歌
+        heartSinceLiked = 0
+        heartLikedEvery = randomLikedInterval()
+        heartRecent.length = 0
+        heartLikedUsed.clear()
+        heartLikedPool = []
+        heartPendingLiked = ''
+        void maybeFillIntelligence(current)
+      }
     },
 
     setLevel: async (level) => {
@@ -1127,6 +1316,7 @@ export function flushPlaybackState(): void {
       progress: position,
       context: context ?? null,
       heartKeys: usePlayerStore.getState().heartKeys,
+      heartLikedKeys: usePlayerStore.getState().heartLikedKeys,
     })
     .catch(() => undefined)
 }

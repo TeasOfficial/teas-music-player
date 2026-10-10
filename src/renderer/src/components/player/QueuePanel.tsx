@@ -23,6 +23,11 @@ export function QueuePanel(): ReactNode {
   const context = usePlayerStore((state) => state.context)
   const heartKeys = usePlayerStore((state) => state.heartKeys)
   const heartSet = useMemo(() => new Set(heartKeys), [heartKeys])
+  const heartLikedKeys = usePlayerStore((state) => state.heartLikedKeys)
+  const heartLikedSet = useMemo(
+    () => new Set(heartLikedKeys),
+    [heartLikedKeys],
+  )
 
   // 关闭时不卸载：进退场交给 CSS 的 display 过渡，
   // 直接 return null 的话元素消失，退场动画就没机会播
@@ -33,6 +38,12 @@ export function QueuePanel(): ReactNode {
           <span className="f-14 bold">当前播放</span>
           <span className="f-12 muted">
             共 {queue.length} 首{context?.name ? ` · 来自${context.name}` : ''}
+            {heartLikedKeys.length > 0 && (
+              <span className="queue-heart-stat queue-heart-stat-liked">
+                <Icon name="heart-filled" size={11} />
+                喜欢 {heartLikedKeys.length}
+              </span>
+            )}
             {heartKeys.length > 0 && (
               <span className="queue-heart-badge">
                 <Icon name="heart-filled" size={11} />
@@ -68,6 +79,9 @@ export function QueuePanel(): ReactNode {
           queue.map((song, itemIndex) => {
             const isCurrent =
               current?.id === song.id && current?.source === song.source
+            const isHeartLiked = heartLikedSet.has(
+              `${song.source ?? 'netease'}:${song.id}`,
+            )
             const isHeart = heartSet.has(
               `${song.source ?? 'netease'}:${song.id}`,
             )
@@ -115,6 +129,14 @@ export function QueuePanel(): ReactNode {
                     </div>
                     {isHeart && (
                       <span className="queue-heart-tag" title="心动模式推荐">
+                        <Icon name="heart-filled" size={11} />
+                      </span>
+                    )}
+                    {isHeartLiked && (
+                      <span
+                        className="queue-heart-tag queue-heart-tag-liked"
+                        title="我喜欢的音乐（心动模式间隔插入）"
+                      >
                         <Icon name="heart-filled" size={11} />
                       </span>
                     )}

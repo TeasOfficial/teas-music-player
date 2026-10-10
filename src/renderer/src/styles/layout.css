@@ -1005,6 +1005,24 @@
   color: var(--accent-2);
 }
 
+/* 「我喜欢的音乐」间隔插入：与心动推荐同形状、不同色，避免两者混淆 */
+.queue-heart-tag-liked {
+  color: var(--accent);
+}
+
+.queue-heart-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.queue-heart-stat-liked {
+  color: var(--accent);
+}
+
 .queue-item {
   display: flex;
   align-items: center;

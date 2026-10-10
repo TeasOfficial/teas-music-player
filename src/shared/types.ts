@@ -441,6 +441,8 @@ export interface Settings {
     context?: { type: string; id?: number; name?: string } | null
     /** 心动模式插入的曲目键（`source:id`），用于重启后仍能标出推荐歌 */
     heartKeys?: string[]
+    /** 心动模式里作为「回到我喜欢的音乐」插入的曲目键，重启后仍能标出 */
+    heartLikedKeys?: string[]
   }
   /** 启动时恢复播放状态 */
   resumeOnStart: boolean
